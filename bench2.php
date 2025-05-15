@@ -11,9 +11,6 @@ use WP_Query;
 use WP_Theme;
 use WP_Error;
 
-// TODO Remove
-define( 'BENCH2_KEY', 'benchino.secret' );
-
 function rest_api_init() {
 	register_rest_route( 'bench2/1.0', '/hello', [
 		'callback' => __NAMESPACE__ . '\hello',
