@@ -108,6 +108,7 @@ function prepare( WP_REST_Request $request ) {
 		'wordpress',
 		'woocommerce',
 		'learndash',
+		'misc',
 		'finalize',
 	] ) ) {
 		return new WP_Error( 'invalid' );
@@ -124,6 +125,10 @@ function prepare( WP_REST_Request $request ) {
 	}
 
 	return $func( $config );
+}
+
+function _prepare_misc( $config ) {
+	return _prepare_wordpress( $config );
 }
 
 function _prepare_wordpress( $config ) {
