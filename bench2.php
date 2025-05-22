@@ -127,69 +127,42 @@ function prepare( WP_REST_Request $request ) {
 	return $func( $config );
 }
 
-function _prepare_misc( $config ) {
-	return _prepare_wordpress( $config );
-}
-
 function _prepare_wordpress( $config ) {
-	wp_suspend_cache_addition();
+	wp_suspend_cache_addition( true );
 
 	$ops = [
-		'theme',
+		'theme' => '_prepare_wordpress__theme',
+		'users' => '_prepare_wordpress__users',
+		'posts' => '_prepare_wordpress__posts',
+		'pages' => '_prepare_wordpress__pages',
+		'media' => '_prepare_wordpress__media',
 	];
 
-	foreach ( [
-		'users',
-		'posts',
-		'pages',
-		'media',
-	] as $op ) {
-		if ( ! empty( $config[ $op ] ) ) {
-			$ops[] = $op;
-		}
-	}
+	return _prepare( $ops, $config );
+}
 
-	$op = 'theme';
-	if ( ! empty( $config['op'] ) ) {
-		$op = $config['op'];
-	}
+function _prepare_woocommerce( $config ) {
+	wp_suspend_cache_addition( true );
+	add_filter( 'pre_wp_mail', '__return_true' );
 
-	if ( ! in_array( $op, $ops ) ) {
-		return new WP_Error( 'wrong-op' );
-	}
+	$ops = [
+		'users' => '_prepare_wordpress__users',
+		'posts' => '_prepare_wordpress__posts',
+		'pages' => '_prepare_wordpress__pages',
+		'media' => '_prepare_wordpress__media',
 
-	reset( $ops );
-	while ( $_op = current( $ops ) ) {
-		$next_op = next( $ops );
+		'plugin'   => '_prepare_woocommerce__plugin',
+		'config'   => '_prepare_woocommerce__config',
+		'theme'    => '_prepare_woocommerce__theme',
+		'products' => '_prepare_woocommerce__products',
+		'orders'   => '_prepare_woocommerce__orders',
+	];
 
-		if ( $_op !== $op ) {
-			continue;
-		}
+	return _prepare( $ops, $config );
+}
 
-		$func = __NAMESPACE__ . '\_prepare_wordpress__' . $op;
-
-		if ( ! is_callable( $func ) ) {
-			return new WP_Error( 'invalid' );
-		}
-
-		$r = $func( $config );
-		if ( is_wp_error( $r ) ) {
-			return $r;
-		}
-
-		if ( is_bool( $r ) && ! $r ) {
-			return $r;
-		}
-
-		// Allow op re-runs/cunks.
-		if ( is_array( $r ) ) {
-			return $r;
-		}
-
-		if ( $next_op ) {
-			return [ 'next_op' => $next_op ];
-		}
-	}
+function _prepare_misc( $config ) {
+	return _prepare_wordpress( $config );
 }
 
 function _prepare_wordpress__theme( $config ) {
@@ -202,23 +175,7 @@ function _prepare_wordpress__theme( $config ) {
 }
 
 function _prepare_wordpress__users( $config ) {
-	global $wpdb, $wp_object_cache;
-
-	$start = 1;
-	$chunk = 100;
-	$created = [];
-
-	if ( ! empty( $config['op_args'] ) ) {
-		if ( $config['op_args'] === 'done' ) {
-			return;
-		}
-
-		$start = intval( $config['op_args'] );
-	}
-
-	$end = min( $start + $chunk -1, $config['users'] );
-
-	for ( $i = $start; $i <= $end; $i++ ) {
+	return _chunk( $config, $config['users'], function( $i ) use ( $config ) {
 		$prefix = substr( md5( $i ), 0, 8 );
 		$username = $prefix . '.bench2.' . $i;
 
@@ -232,99 +189,35 @@ function _prepare_wordpress__users( $config ) {
 			'role'         => $config['role'],
 		] );
 
-		$created[] = $username;
-
-		if ( $i % 100 == 0 ) {
-			$wpdb->queries = [];
-			$wp_object_cache->cache = [];
-		}
-	}
-
-	if ( $end < $config['users'] ) {
-		return [ 'next_op' => 'users', 'op_args' => $end + 1, 'created' => $created ];
-	}
-
-	return [ 'next_op' => 'users', 'op_args' => 'done', 'created' => $created ];
+		return $username;
+	} );
 }
 
 function _prepare_wordpress__posts( $config ) {
-	global $wpdb, $wp_object_cache;
-
-	$start = 1;
-	$chunk = 100;
-
-	if ( ! empty( $config['op_args'] ) ) {
-		$start = intval( $config['op_args'] );
-	}
-
-	$end = min( $start + $chunk -1, $config['posts'] );
-
-	for ( $i = $start; $i <= $end; $i++ ) {
+	return _chunk( $config, $config['posts'], function( $i ) {
 		$prefix = substr( md5( $i ), 0, 8 );
-
 		wp_insert_post( [
 			'post_type' => 'post',
 			'post_status' => 'publish',
 			'post_title' => $prefix . ': A Bench2 Test Post',	
 			'post_content' => _lorem( $i ),
 		] );
-
-		if ( $i % 100 == 0 ) {
-			$wpdb->queries = [];
-			$wp_object_cache->cache = [];
-		}
-	}
-
-	if ( $end < $config['posts'] ) {
-		return [ 'next_op' => 'posts', 'op_args' => $end + 1 ];
-	}
+	} );
 }
 
 function _prepare_wordpress__pages( $config ) {
-	global $wpdb, $wp_object_cache;
-
-	$start = 1;
-	$chunk = 100;
-
-	if ( ! empty( $config['op_args'] ) ) {
-		$start = intval( $config['op_args'] );
-	}
-
-	$end = min( $start + $chunk -1, $config['pages'] );
-
-	for ( $i = $start; $i <= $end; $i++ ) {
+	return _chunk( $config, $config['pages'], function( $i ) {
 		$prefix = substr( md5( $i ), 0, 8 );
-
 		wp_insert_post( [
 			'post_type' => 'page',
 			'post_status' => 'publish',
 			'post_title' => $prefix . ': A Bench2 Test Page',
 			'post_content' => _lorem( $i ),
 		] );
-
-		if ( $i % 100 == 0 ) {
-			$wpdb->queries = [];
-			$wp_object_cache->cache = [];
-		}
-	}
-
-	if ( $end < $config['pages'] ) {
-		return [ 'next_op' => 'pages', 'op_args' => $end + 1 ];
-	}
+	} );
 }
 
 function _prepare_wordpress__media( $config ) {
-	global $wpdb, $wp_object_cache;
-
-	$start = 1;
-	$chunk = 20;
-
-	if ( ! empty( $config['op_args'] ) ) {
-		$start = intval( $config['op_args'] );
-	}
-
-	$end = min( $start + $chunk -1, $config['media'] );
-
 	$include = [
 		ABSPATH . 'wp-admin/includes/media.php',
 		ABSPATH . 'wp-admin/includes/file.php',
@@ -340,7 +233,7 @@ function _prepare_wordpress__media( $config ) {
 	$upload_dir = wp_upload_dir();
 	wp_mkdir_p( $upload_dir['path'] );
 
-	for ( $i = $start; $i <= $end; $i++ ) {
+	return _chunk( $config, $config['media'], function( $i ) {
 		$prefix = substr( md5( $i ), 0, 8 );
 		$filename = (string) ( $i % 10 ) . '.jpg';
 		copy( __DIR__ . '/assets/' . $filename, sys_get_temp_dir() . '/' . $filename );
@@ -348,28 +241,230 @@ function _prepare_wordpress__media( $config ) {
 			'name' => $prefix . '.media.' . $i . '.jpg',
 			'tmp_name' => sys_get_temp_dir() . '/' . $filename,
 		] );
-	}
-
-	if ( $end < $config['media'] ) {
-		return [ 'next_op' => 'media', 'op_args' => $end + 1 ];
-	}
+	}, $size=20 );
 }
 
-function _prepare_woocommerce( $config ) {
+function _prepare_woocommerce__plugin( $config ) {
+	if ( is_readable( ABSPATH . 'wp-admin/includes/plugin.php' ) ) {
+		include_once( ABSPATH . 'wp-admin/includes/plugin.php' );
+	}
+
+	$activate = [
+		'woocommerce/woocommerce.php',
+	];
+
+	activate_plugins( $activate, true );
+}
+
+function _prepare_woocommerce__config( $config ) {
+	update_option( 'woocommerce_onboarding_profile', [
+		'skipped' => true,
+	] );
+
+	update_option( 'woocommerce_coming_soon', 'no' );
+
+	// Cash on delivery settings.
+	update_option( 'woocommerce_cod_settings', [
+		'enabled'            => 'yes',
+		'title'              => 'Cash on delivery',
+		'description'        => 'Pay with cash upon delivery',
+		'instructions'       => 'Pay with cash upon delivery',
+		'enable_for_methods' => [],
+		'enable_for_virtual' => 'yes',
+	] );
+
+	\WC_Install::create_pages();
+
+	$menu_id = wp_create_nav_menu( 'primary' );
+
+	wp_update_nav_menu_item( $menu_id, 0, [
+		'menu-item-title' => 'Home',
+		'menu-item-url' => home_url( '/' ),
+		'menu-item-status' => 'publish',
+	] );
+
+	wp_update_nav_menu_item( $menu_id, 0, [
+		'menu-item-title' => 'Shop',
+		'menu-item-object' => 'page',
+		'menu-item-type' => 'post_type',
+		'menu-item-object-id' => get_option( 'woocommerce_shop_page_id' ),
+		'menu-item-status' => 'publish',
+	] );
+
+	wp_update_nav_menu_item( $menu_id, 0, [
+		'menu-item-title' => 'Account',
+		'menu-item-object' => 'page',
+		'menu-item-type' => 'post_type',
+		'menu-item-object-id' => get_option( 'woocommerce_myaccount_page_id' ),
+		'menu-item-status' => 'publish',
+	] );
+
+	$locations = get_theme_mod( 'nav_menu_locations' );
+	$locations['primary'] = $menu_id;
+	set_theme_mod( 'nav_menu_locations', $locations );
+}
+
+function _prepare_woocommerce__theme( $config ) {
 	$theme = wp_get_theme( 'storefront' );
 	if ( ! $theme->exists() ) {
 		return new WP_Error( 'theme-not-found' );
 	}
 
 	switch_theme( $theme->get_stylesheet() );
-	return true;
+}
+
+function _prepare_woocommerce__products( $config ) {
+	$images = get_posts( [
+		'fields'         => 'ids',
+		'post_type'      => 'attachment',
+		'posts_per_page' => 10,
+	] );
+
+	return _chunk( $config, $config['products'], function( $i ) use ( $images ) {
+		$prefix = substr( md5( $i ), 0, 8 );
+		$product = new \WC_Product_Simple();
+		$product->set_name( $prefix . ' bench2 item' );
+		$product->set_slug( $prefix . '-bench2-item' );
+		$product->set_regular_price( (float) 249.00 % $i + 1.0 );
+		$product->set_description( _lorem( $i ) );
+		$product->set_short_description( _lorem( $i ) );
+
+		if ( $images ) {
+			$product->set_image_id( $images[ $i % count( $images ) ] );
+		}
+
+		$product->save();
+	} );
+}
+
+function _prepare_woocommerce__orders( $config ) {
+	global $wpdb;
+
+	$user_ids = $wpdb->get_col( "SELECT ID FROM $wpdb->users
+		WHERE user_email LIKE '%@bench2.com'" );
+
+	$product_ids = get_posts( [
+		'fields'         => 'ids',
+		'post_type'      => 'product',
+		'posts_per_page' => 100,
+	] );
+
+	return _chunk( $config, $config['orders'], function( $i ) use ( $user_ids, $product_ids ) {
+		$order = wc_create_order();
+		$order->set_customer_id( (int) $user_ids[ $i % count( $user_ids ) ] );
+		$order->add_product( wc_get_product( $product_ids[ $i % count( $product_ids ) ] ) );
+		$order->calculate_totals();
+		$order->set_status( 'wc-completed' );
+		$order->save();
+	}, $size=20 );
 }
 
 function _prepare_finalize( $config ) {
 	update_option( 'bench2_status', 'ready' );
 	wp_cache_flush();
 	// TODO Maybe warm caches
-	return true;
+}
+
+function _prepare( $ops, $config ) {
+	// Skip potentially empty ops.
+	foreach ( [
+		'posts',
+		'pages',
+		'media',
+		'users',
+		'products',
+		'orders',
+	] as $key ) {
+		if ( empty( $config[ $key ] ) ) {
+			unset( $ops[ $key ] );
+		}
+	}
+
+	if ( ! empty( $config['op'] ) ) {
+		$op = $config['op'];
+	}
+
+	if ( $op === 'hello' ) {
+		return [ 'next_op' => array_key_first( $ops ) ];
+	}
+
+	if ( ! array_key_exists( $op, $ops ) ) {
+		return new WP_Error( 'wrong-op' );
+	}
+
+	reset( $ops );
+	while ( $callback = current( $ops ) ) {
+		$_op = key( $ops );
+		next( $ops );
+		$next_op = key( $ops );
+
+		if ( $_op !== $op ) {
+			continue;
+		}
+
+		$func = __NAMESPACE__ . '\\' . $callback;
+
+		if ( ! is_callable( $func ) ) {
+			return new WP_Error( 'invalid' );
+		}
+
+		$r = $func( $config );
+		if ( is_wp_error( $r ) ) {
+			return $r;
+		}
+
+		if ( is_bool( $r ) && ! $r ) {
+			return $r;
+		}
+
+		// Allow op re-runs/chunks.
+		if ( is_array( $r ) ) {
+			if ( empty( $r['next_op'] ) ) {
+				$r['next_op'] = $next_op;
+			}
+
+			return $r;
+		}
+
+		if ( $next_op ) {
+			return [ 'next_op' => $next_op ];
+		}
+	}
+}
+
+function _chunk( $config, $num, $callback, $size = 100 ) {
+	global $wpdb, $wp_object_cache;
+
+	$start = 1;
+
+	if ( ! empty( $config['op_args'] ) ) {
+		$start = intval( $config['op_args'] );
+	}
+
+	$end = min( $start + $size -1, $num );
+	$data = [];
+
+	for ( $i = $start; $i <= $end; $i++ ) {
+		$r = $callback( $i );
+		if ( $r ) {
+			$data[] = $r;
+		}
+
+		if ( $i % 20 == 0 ) {
+			$wpdb->queries = [];
+			$wp_object_cache->cache = [];
+		}
+	}
+
+	$retval = [ 'op_data' => $data ];
+
+	// Chunk is not finished, re-run this op.
+	if ( $end < $num ) {
+		$retval['op_args'] = $end + 1;
+		$retval['next_op'] = $config['op'];
+	}
+
+	return $retval;
 }
 
 function clean( $request ) {
@@ -460,8 +555,62 @@ function _clean_data() {
 
 	$wpdb->query( "DELETE FROM $wpdb->users WHERE user_email LIKE '%@bench2.com'" );
 	$wpdb->query( "DELETE FROM $wpdb->usermeta WHERE user_ID NOT IN (SELECT ID FROM $wpdb->users)" );
-	
-	// TODO Delete any other options we've added.
+
+	$tables = $wpdb->get_col( "SHOW TABLES LIKE '{$wpdb->prefix}wc_%'" );
+	foreach ( $tables as $table ) {
+		$wpdb->query( "DROP TABLE {$table}" );
+	}
+
+	$tables = $wpdb->get_col( "SHOW TABLES LIKE '{$wpdb->prefix}woocommerce_%'" );
+	foreach ( $tables as $table ) {
+		$wpdb->query( "DROP TABLE {$table}" );
+	}
+
+	$tables = $wpdb->get_col( "SHOW TABLES LIKE '{$wpdb->prefix}actionscheduler_%'" );
+	foreach ( $tables as $table ) {
+		$wpdb->query( "DROP TABLE {$table}" );
+	}
+
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'woocommerce\_%'" );
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'wc\_%'" );
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'widget\_woocommerce\_%'" );
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'widget\_wc\_%'" );
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE '%ActionScheduler%'" );
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'action\_scheduler\_%'" );
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'jetpack%'" );
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE '%supports\_woocommerce'" );
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'wp\_1\_wc\_%'" );
+
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE '\_transient\_%'" );
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE '\_site\_transient\_%'" );
+
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'storefront\_%'" );
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name = 'theme_mods_storefront'" );
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name = 'product_cat_children'" );
+
+	$crons = _get_cron_array();
+	foreach ( $crons as $time => $hooks ) {
+		foreach ( $hooks as $hook => $events ) {
+			foreach ( $events as $event ) {
+				$args = [];
+				if ( ! empty( $event['args'] ) ) {
+					$args = $event['args'];
+				}
+
+				if ( substr( $hook, 0, 11 ) == 'woocommerce'
+					|| substr( $hook, 0, 3 ) == 'wc_'
+					|| $hook == 'generate_category_lookup_table'
+					|| substr( $hook, 0, 8 ) == 'wp_1_wc_'
+					|| substr( $hook, 0, 7 ) == 'jetpack'
+					|| substr( $hook, 0, 16 ) == 'action_scheduler'
+				) {
+					wp_clear_scheduled_hook( $hook, $args );
+					continue;
+				}
+			}
+		}
+	}
+
 	return true;
 }
 
