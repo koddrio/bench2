@@ -524,7 +524,7 @@ function _clean_plugins() {
 }
 
 function _clean_data() {
-	global $wpdb, $wp_object_cache;
+	global $wpdb;
 	wp_suspend_cache_addition();
 
 	while ( true ) {
@@ -545,7 +545,7 @@ function _clean_data() {
 		}
 
 		$wpdb->queries = [];
-		$wp_object_cache->cache = [];
+		wp_cache_flush_runtime();
 	}
 
 	$wpdb->query( "TRUNCATE TABLE $wpdb->posts" );
