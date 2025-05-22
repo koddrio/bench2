@@ -438,7 +438,7 @@ function _prepare( $ops, $config ) {
 }
 
 function _chunk( $config, $num, $callback, $size = 100 ) {
-	global $wpdb, $wp_object_cache;
+	global $wpdb;
 
 	$start = 1;
 
@@ -457,7 +457,7 @@ function _chunk( $config, $num, $callback, $size = 100 ) {
 
 		if ( $i % 20 == 0 ) {
 			$wpdb->queries = [];
-			$wp_object_cache->cache = [];
+			wp_cache_flush_runtime();
 		}
 	}
 
