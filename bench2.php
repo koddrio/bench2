@@ -253,7 +253,7 @@ function _prepare_woocommerce__plugin( $config ) {
 		'woocommerce/woocommerce.php',
 	];
 
-	activate_plugins( $activate, true );
+	activate_plugins( $activate, '', false, true );
 }
 
 function _prepare_woocommerce__config( $config ) {
@@ -262,6 +262,11 @@ function _prepare_woocommerce__config( $config ) {
 	] );
 
 	update_option( 'woocommerce_coming_soon', 'no' );
+	update_option( 'woocommerce_show_marketplace_suggestions', 'no' );
+	update_option( 'woocommerce_allow_tracking', 'no' );
+	update_option( 'woocommerce_task_list_hidden', 'yes' );
+	update_option( 'woocommerce_task_list_complete', 'yes' );
+	update_option( 'woocommerce_task_list_welcome_modal_dismissed', 'yes' );
 
 	// Cash on delivery settings.
 	update_option( 'woocommerce_cod_settings', [
