@@ -56,8 +56,8 @@ function learndash_clean_progress() {
 		return new WP_Error( 'invalid-auth' );
 	}
 
-	if ( strpos( $current_user->user_login, '@bench2.com' ) === false ) {
-		return new WP_Error( 'invalid-user' );
+	if ( strpos( $current_user->user_email, '@bench2.com' ) === false ) {
+		return new WP_Error( 'invalid-email' );
 	}
 
 	delete_user_meta( $current_user->ID, '_sfwd-quizzes' );
