@@ -39,8 +39,31 @@ function rest_api_init() {
 		'methods' => WP_REST_Server::CREATABLE,
 	] );
 
+	register_rest_route( 'bench2/1.0', '/learndash/clean-progress', [
+		'callback' => __NAMESPACE__ . '\learndash_clean_progress',
+		'methods' => WP_REST_Server::CREATABLE,
+	] );
 }
 add_action( 'rest_api_init', __NAMESPACE__ . '\rest_api_init' );
+
+function learndash_clean_progress() {
+	if ( ! get_current_user_id() ) {
+		return new WP_Error( 'invalid-auth' );
+	}
+
+	$current_user = wp_get_current_user();
+	if ( empty( $current_user ) || empty( $current_user->ID ) ) {
+		return new WP_Error( 'invalid-auth' );
+	}
+
+	if ( strpos( $current_user->user_login, '@bench2.com' ) === false ) {
+		return new WP_Error( 'invalid-user' );
+	}
+
+	delete_user_meta( $current_user->ID, '_sfwd-quizzes' );
+	delete_user_meta( $current_user->ID, '_sfwd-course_progress' );
+	return true;
+}
 
 function hello() {
 	return 'hi';
