@@ -387,7 +387,7 @@ function _prepare_learndash__plugin( $config ) {
 	}
 
 	$activate = [
-		'sfwd-lms/sfwd-lms.php',
+		'sfwd-lms/sfwd_lms.php',
 	];
 
 	activate_plugins( $activate, '', false, true );
@@ -672,7 +672,7 @@ function _clean_plugins() {
 
 	$deactivate = [
 		'woocommerce/woocommerce.php',
-		'sfwd-lms/sfwd-lms.php',
+		'sfwd-lms/sfwd_lms.php',
 	];
 
 	deactivate_plugins( $deactivate, true );
