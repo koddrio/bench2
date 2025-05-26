@@ -47,6 +47,8 @@ function rest_api_init() {
 add_action( 'rest_api_init', __NAMESPACE__ . '\rest_api_init' );
 
 function learndash_clean_progress() {
+	global $wpdb;
+
 	if ( ! get_current_user_id() ) {
 		return new WP_Error( 'invalid-auth' );
 	}
@@ -62,6 +64,18 @@ function learndash_clean_progress() {
 
 	delete_user_meta( $current_user->ID, '_sfwd-quizzes' );
 	delete_user_meta( $current_user->ID, '_sfwd-course_progress' );
+
+	$wpdb->query( "DELETE FROM $wpdb->usermeta WHERE user_id = {$current_user->ID} AND (
+		meta_key LIKE 'completed\_%'
+		OR meta_key LIKE 'course\_%\_access\_from'
+		OR meta_key LIKE 'group\_%\_access\_from'
+		OR meta_key LIKE 'course\_completed\_%'
+		OR meta_key LIKE 'learndash\_course\_%'
+		OR meta_key LIKE 'learndash\_group\_%'
+	)");
+
+	wp_cache_delete( $current_user->ID, 'user_meta' );
+
 	return true;
 }
 
