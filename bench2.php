@@ -515,7 +515,7 @@ function _prepare_learndash__courses( $config ) {
 
 			update_post_meta( $quiz_id, 'ld_quiz_questions', $quiz_questions_map );
 		}
-	}, $size=10 );
+	}, $size=1 );
 }
 
 function _prepare_finalize( $config ) {
