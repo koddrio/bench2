@@ -165,6 +165,23 @@ function _prepare_misc( $config ) {
 	return _prepare_wordpress( $config );
 }
 
+function _prepare_learndash( $config ) {
+	wp_suspend_cache_addition( true );
+
+	$ops = [
+		'users' => '_prepare_wordpress__users',
+		'posts' => '_prepare_wordpress__posts',
+		'pages' => '_prepare_wordpress__pages',
+		'media' => '_prepare_wordpress__media',
+
+		'plugin'  => '_prepare_learndash__plugin',
+		'config'  => '_prepare_learndash__config',
+		'courses' => '_prepare_learndash__courses',
+	];
+
+	return _prepare( $ops, $config );
+}
+
 function _prepare_wordpress__theme( $config ) {
 	$theme = wp_get_theme( 'twentytwentyfive' );
 	if ( ! $theme->exists() ) {
@@ -364,6 +381,143 @@ function _prepare_woocommerce__orders( $config ) {
 	}, $size=20 );
 }
 
+function _prepare_learndash__plugin( $config ) {
+	if ( is_readable( ABSPATH . 'wp-admin/includes/plugin.php' ) ) {
+		include_once( ABSPATH . 'wp-admin/includes/plugin.php' );
+	}
+
+	$activate = [
+		'sfwd-lms/sfwd-lms.php',
+	];
+
+	activate_plugins( $activate, '', false, true );
+}
+
+function _prepare_learndash__config( $config ) {
+	update_option( 'stellarwp_telemetry_learndash_show_optin', '0' );
+}
+
+function _prepare_learndash__courses( $config ) {
+	return _chunk( $config, $config['courses'], function( $i ) {
+		$prefix = substr( md5( $i ), 0, 8 );
+		$course_id = wp_insert_post( [
+			'post_title'   => $prefix . ' bench2 course',
+			'post_content' => _lorem( $i ),
+			'post_type'    => 'sfwd-courses',
+			'post_status'  => 'publish',
+		] );
+
+		update_post_meta( $course_id, '_sfwd-courses', [
+			'course_price_type' => 'free',
+		] );
+
+		for ( $j = 1; $j <= 10; $j++ ) {
+			$lesson_prefix = substr( md5( "lesson:{$i}:{$j}" ), 0, 8 );
+			$lesson_id = wp_insert_post( [
+				'post_title'   => $lesson_prefix . ' bench2 lesson',
+				'post_content' => _lorem( $i + $j ),
+				'post_type'    => 'sfwd-lessons',
+				'post_status'  => 'publish',
+			] );
+
+			update_post_meta( $lesson_id, 'course_id', $course_id );
+		}
+
+		for ( $k = 1; $k <= 2; $k++ ) {
+			$quiz_prefix = substr( md5( "quiz:{$i}:{$k}" ), 0, 8 );
+			$quiz_id = wp_insert_post( [
+				'post_title'   => $quiz_prefix . ' bench2 quiz',
+				'post_content' => _lorem( $i + $k ),
+				'post_type'    => 'sfwd-quiz',
+				'post_status'  => 'publish',
+			] );
+
+			update_post_meta( $quiz_id, 'course_id', $course_id );
+			update_post_meta( $quiz_id, 'ld_course_' . $course_id, $course_id );
+
+			add_filter( 'map_meta_cap', function( $caps, $cap, $user_id, $args ) {
+				error_log( $cap );
+				if ( $cap === 'wpProQuiz_edit_quiz' ) {
+					return [ 'exist' ];
+				}
+
+				if ( $cap === 'wpProQuiz_add_quiz' ) {
+					return [ 'exist' ];
+				}
+
+				return $caps;
+			}, 10, 4 );
+
+			$pro_quiz = new \WpProQuiz_Controller_Quiz();
+			$pro_quiz->route(
+				[
+					'action'  => 'addUpdateQuiz',
+					'quizId'  => 0,
+					'post_id' => $quiz_id,
+				],
+				[
+					'form'    => [],
+					'post_ID' => $quiz_id,
+				]
+			);
+
+			// $quiz_pro_id        = \learndash_get_quiz_pro_id( $quiz_id );
+			$question_mapper    = new \WpProQuiz_Model_QuestionMapper();
+			$quiz_questions_map = [];
+
+			for ( $l = 1; $l <= 10; $l++ ) {
+				$question_prefix = substr( md5( "lesson:{$i}:{$k}:{$l}" ), 0, 8 );	
+				$question_args = [
+					'action'       => 'new_step',
+					'post_title'   => $question_prefix . ' bench2 question',
+					'post_content' => _lorem( $i + $k + $l ),
+					'post_type'    => 'sfwd-question',
+					'post_status'  => 'publish',
+				];
+
+				$question_id     = wp_insert_post( $question_args );
+				$question_pro_id = learndash_update_pro_question( 0, $question_args );
+
+				update_post_meta( $question_id, 'quiz_id', $quiz_id ); 
+				update_post_meta( $question_id, 'question_pro_id', absint( $question_pro_id ) );
+				learndash_proquiz_sync_question_fields( $question_id, $question_pro_id );
+				learndash_update_setting( $question_id, 'quiz', $quiz_id );
+
+				$answers = [];
+				for ( $m = 1; $m <= 5; $m++ ) {
+					$answer_prefix = substr( md5( "answer:{$i}:{$k}:{$l}:{$m}" ), 0, 8 );	
+					$correct_str   = ( $m === 1 ) ? 'correct' : 'incorrect';
+
+					$answers[] = [
+						'_answer'             => $answer_prefix . ' bench2 answer ' . $correct_str,
+						'_correct'            => $m === 1,
+						'_graded'             => '1',
+						'_gradedType'         => 'text',
+						'_gradingProgression' => 'not-graded-none',
+						'_html'               => false,
+						'_points'             => 1,
+						'_sortString'         => '',
+						'_sortStringHtml'     => false,
+						'_type'               => 'answer',
+					];
+				}
+
+				$question_model = $question_mapper->fetch( $question_pro_id );
+				$question_model->set_array_to_object( [
+					'_answerData' => $answers,
+					'_answerType' => 'single',
+					'_question'   => $question_prefix . ' bench2 question',
+				] );
+
+				$question_mapper->save( $question_model );
+				$quiz_questions_map[ $question_id ] = $question_pro_id;
+			}
+
+			update_post_meta( $quiz_id, 'ld_quiz_questions', $quiz_questions_map );
+		}
+	}, $size=10 );
+}
+
 function _prepare_finalize( $config ) {
 	update_option( 'bench2_status', 'ready' );
 	wp_cache_flush();
@@ -379,6 +533,7 @@ function _prepare( $ops, $config ) {
 		'users',
 		'products',
 		'orders',
+		'courses',
 	] as $key ) {
 		if ( empty( $config[ $key ] ) ) {
 			unset( $ops[ $key ] );
@@ -517,6 +672,7 @@ function _clean_plugins() {
 
 	$deactivate = [
 		'woocommerce/woocommerce.php',
+		'sfwd-lms/sfwd-lms.php',
 	];
 
 	deactivate_plugins( $deactivate, true );
@@ -576,6 +732,11 @@ function _clean_data() {
 		$wpdb->query( "DROP TABLE {$table}" );
 	}
 
+	$tables = $wpdb->get_col( "SHOW TABLES LIKE '{$wpdb->prefix}learndash_%'" );
+	foreach ( $tables as $table ) {
+		$wpdb->query( "DROP TABLE {$table}" );
+	}
+
 	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'woocommerce\_%'" );
 	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'wc\_%'" );
 	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'widget\_woocommerce\_%'" );
@@ -592,6 +753,14 @@ function _clean_data() {
 	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'storefront\_%'" );
 	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name = 'theme_mods_storefront'" );
 	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name = 'product_cat_children'" );
+
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'wpProQuiz\_%'" );
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'learndash%'" );
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'widget_sfwd-%'" );
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'widget_ld%'" );
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'stellarwp%'" );
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'ld-%'" );
+	$wpdb->query( "DELETE FROM $wpdb->options WHERE option_name LIKE 'ld\_%'" );
 
 	$crons = _get_cron_array();
 	foreach ( $crons as $time => $hooks ) {
