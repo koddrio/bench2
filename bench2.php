@@ -1,6 +1,7 @@
 <?php
 /**
  * Plugin Name: Bench2
+ * Version: 1.1
  */
 
 namespace bench2;
@@ -10,6 +11,9 @@ use WP_REST_Request;
 use WP_Query;
 use WP_Theme;
 use WP_Error;
+
+// Good luck recovering your password.
+add_filter( 'pre_wp_mail', '__return_true' );
 
 function rest_api_init() {
 	register_rest_route( 'bench2/1.0', '/hello', [
@@ -132,7 +136,12 @@ function specs() {
 		'object_cache' => (bool) wp_using_ext_object_cache(),
 		'active_plugins' => (array) get_option( 'active_plugins' ),
 		'mu_plugins' => array_keys( (array) _call( 'get_mu_plugins' ) ),
+		'plugin_versions' => [],
 	];
+
+	foreach ( get_plugins() as $path => $plugin ) {
+		$data['plugin_versions'][ $path ] = $plugin['Version'];
+	}
 
 	return $data;
 }
@@ -148,7 +157,7 @@ function prepare( WP_REST_Request $request ) {
 		'misc',
 		'finalize',
 	] ) ) {
-		return new WP_Error( 'invalid' );
+	return new WP_Error( 'invalid' );
 	}
 
 	$func = __NAMESPACE__ . '\_prepare_' . $context;
@@ -180,7 +189,6 @@ function _prepare_wordpress( $config ) {
 
 function _prepare_woocommerce( $config ) {
 	wp_suspend_cache_addition( true );
-	add_filter( 'pre_wp_mail', '__return_true' );
 
 	$ops = [
 		'users' => '_prepare_wordpress__users',
@@ -253,7 +261,7 @@ function _prepare_wordpress__posts( $config ) {
 		wp_insert_post( [
 			'post_type' => 'post',
 			'post_status' => 'publish',
-			'post_title' => $prefix . ': A Bench2 Test Post',	
+			'post_title' => $prefix . ': A Bench2 Test Post', 
 			'post_content' => _lorem( $i ),
 		] );
 	} );
@@ -503,7 +511,7 @@ function _prepare_learndash__courses( $config ) {
 			$quiz_questions_map = [];
 
 			for ( $l = 1; $l <= 10; $l++ ) {
-				$question_prefix = substr( md5( "lesson:{$i}:{$k}:{$l}" ), 0, 8 );	
+				$question_prefix = substr( md5( "lesson:{$i}:{$k}:{$l}" ), 0, 8 );  
 				$question_args = [
 					'action'       => 'new_step',
 					'post_title'   => $question_prefix . ' bench2 question',
@@ -522,7 +530,7 @@ function _prepare_learndash__courses( $config ) {
 
 				$answers = [];
 				for ( $m = 1; $m <= 5; $m++ ) {
-					$answer_prefix = substr( md5( "answer:{$i}:{$k}:{$l}:{$m}" ), 0, 8 );	
+					$answer_prefix = substr( md5( "answer:{$i}:{$k}:{$l}:{$m}" ), 0, 8 ); 
 					$correct_str   = ( $m === 1 ) ? 'correct' : 'incorrect';
 
 					$answers[] = [
@@ -572,9 +580,9 @@ function _prepare( $ops, $config ) {
 		'orders',
 		'courses',
 	] as $key ) {
-		if ( empty( $config[ $key ] ) ) {
-			unset( $ops[ $key ] );
-		}
+	if ( empty( $config[ $key ] ) ) {
+		unset( $ops[ $key ] );
+	}
 	}
 
 	if ( ! empty( $config['op'] ) ) {
@@ -674,7 +682,7 @@ function clean( $request ) {
 		'data',
 		'finalize',
 	] ) ) {
-		return new WP_Error( 'invalid' );
+	return new WP_Error( 'invalid' );
 	}
 
 	$func = __NAMESPACE__ . '\_clean_' . $context;
@@ -844,7 +852,7 @@ function _call() {
 
 function _lorem( $id ) {
 	$lorem = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.';
-	
+
 	$offset = hexdec( substr( md5( $id ), 0, 4 ) ) % strlen( $lorem );
 	return substr( $lorem, $offset ) . substr( $lorem, 0, $offset );
 }
